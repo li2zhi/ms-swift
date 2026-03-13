@@ -1820,6 +1820,10 @@ class Template(ProcessorMixin):
         if not self.use_megatron and self.sequence_parallel_size > 1:
             res = self._sp_data_collator(res, padding_to, self.tokenizer, padding_side)
 
+        extra_keys = set(batch[0].keys()) - set(res.keys()) & {'sample_idx'}
+        for key in extra_keys:
+            res[key] = [b[key] for b in batch]
+
         return res
 
     def _pad_3d_position_ids(self,

@@ -11,7 +11,7 @@ logger = get_logger()
 
 class TrainerFactory:
     TRAINER_MAPPING = {
-        'causal_lm': 'swift.trainers.Seq2SeqTrainer',
+        'causal_lm': 'swift.trainers.OpusTrainer',
         'seq_cls': 'swift.trainers.Trainer',
         'embedding': 'swift.trainers.EmbeddingTrainer',
         'reranker': 'swift.trainers.RerankerTrainer',

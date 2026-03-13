@@ -7,6 +7,7 @@ from . import patcher
 if TYPE_CHECKING:
     from .arguments import Seq2SeqTrainingArguments, TrainArgumentsMixin, TrainingArguments
     from .embedding_trainer import EmbeddingTrainer
+    from .opus_trainer import OpusTrainer
     from .mixin import DataLoaderMixin, SwiftMixin
     from .reranker_trainer import RerankerTrainer
     from .seq2seq_trainer import Seq2SeqTrainer
@@ -21,6 +22,7 @@ else:
         'mixin': ['DataLoaderMixin', 'SwiftMixin'],
         'reranker_trainer': ['RerankerTrainer'],
         'seq2seq_trainer': ['Seq2SeqTrainer'],
+        'opus_trainer': ['OpusTrainer'],
         'trainer': ['Trainer'],
         'trainer_factory': ['TrainerFactory'],
         'utils': [
