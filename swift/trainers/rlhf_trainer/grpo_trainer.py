@@ -158,6 +158,10 @@ class GRPOTrainer(RolloutTrainerMixin, SwiftMixin, HFGRPOTrainer):
         self._buffered_inputs = None
         self._current_train_step_time = 0.0
 
+        self.reject_sample_count = 0
+        self.total_sample_count = 0
+
+
     def _get_train_sampler(self, train_dataset=None):
         if self.template.sequence_parallel_size > 1:
             from swift.trainers.sequence_parallel import sequence_parallel
@@ -1161,6 +1165,34 @@ class GRPOTrainer(RolloutTrainerMixin, SwiftMixin, HFGRPOTrainer):
         else:
             inputs['rollout_is_weights'] = None
 
+        # Reject Samples
+        rollout_per_token_logps = inputs['rollout_per_token_logps']
+        sparse_ratio = torch.exp(old_per_token_logps - rollout_per_token_logps)
+        sparse_ratio = torch.where(
+            completion_mask,
+            sparse_ratio,
+            torch.ones_like(sparse_ratio),
+        )
+
+        # threshold
+        sparse_reject_threshold = 1e-5
+        sample_reject_ratio_threshold = 0.01
+
+        reject_token_mask = (sparse_ratio < sparse_reject_threshold) & completion_mask
+        num_reject_token = reject_token_mask.sum(dim=1)
+        num_valid_token = completion_mask.sum(dim=1).clamp_min(1)
+        reject_ratios = num_reject_token.float() / num_valid_token.float()
+        rejected_sample_mask = reject_ratios > sample_reject_ratio_threshold
+        kept_sample_mask = ~rejected_sample_mask
+
+        kept_sample_mask_expanded = kept_sample_mask.unsqueeze(-1).expand_as(completion_mask)
+        completion_mask = completion_mask & kept_sample_mask_expanded
+
+        self.reject_sample_count += rejected_sample_mask.sum().item()
+        self.total_sample_count += rejected_sample_mask.numel()
+
+        logger.info(f"reject_sample_count: {self.reject_sample_count}, total_sample_count: {self.total_sample_count}")
+
         log_ratio = per_token_logps - old_per_token_logps
         if self.importance_sampling_level == 'token':
             log_importance_weights = log_ratio
@@ -1199,6 +1231,8 @@ class GRPOTrainer(RolloutTrainerMixin, SwiftMixin, HFGRPOTrainer):
             per_token_loss1 = coef_1 * advantages.unsqueeze(1)
             per_token_loss2 = coef_2 * advantages.unsqueeze(1)
             per_token_loss = -torch.min(per_token_loss1, per_token_loss2)
+
+            per_token_loss = per_token_loss * sparse_ratio
         if entropy_mask is not None:
             per_token_loss = per_token_loss * entropy_mask
         if per_token_kl is not None:
